@@ -1,0 +1,21 @@
+{
+  "name": "test-workers",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "cypress:delete-cache": "cypress cache clear",
+    "cypress:install": "npm install cypress --save",
+    "cypress:open": "cypress open",
+    "cypress:run": "cd scripts && npx cypress run"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "shelljs": "^0.8.3"
+  },
+  "devDependencies": {
+    "cypress": "^4.1.0"
+  }
+}
