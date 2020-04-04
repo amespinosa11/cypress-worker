@@ -13,9 +13,14 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "aws-sdk": "^2.653.0",
+    "axios": "^0.19.2",
+    "cron": "^1.8.2",
+    "file-system": "^2.2.2",
+    "q": "^1.5.1",
     "shelljs": "^0.8.3"
   },
   "devDependencies": {
-    "cypress": "^4.1.0"
+    "cypress": "^4.3.0"
   }
 }
