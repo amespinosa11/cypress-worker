@@ -26,17 +26,20 @@ const startTest = (apkAdress, scriptsAdress) => {
     //shell.exec(`hola`);
 }
 
-const job = new CronJob('20 51 19 * * *', async () => {//seg/min/hour
+const job = new CronJob('20 51 15 * * *', async () => {//seg/min/hour
     console.log('*** Vamos a procesar pruebas calabash ***');
 
-    //let prueba = await desencolarMensajes(``);
-    let prueba = { code: 100 }
+    let prueba = await desencolarMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`);
+
+
+    //let prueba = { code: 100 }
     console.log('prueba : ', prueba);
+    
     if (prueba.code === 100) {
         const pruebaEjecutar = {
-            idPrueba: 1/*parseInt(prueba.data.MessageAttributes.idPrueba.StringValue)*/,
-            scriptFile: "login.feature"/*prueba.data.MessageAttributes.scriptFile.StringValue*/,
-            apkAdress: "../apks/com.habitrpg.android.habitica.apk"
+            idPrueba: parseInt(prueba.data.MessageAttributes.idPrueba.StringValue),
+            scriptFile: prueba.data.MessageAttributes.scriptFile.StringValue,
+            apkAdress: prueba.data.MessageAttributes.apkAdress.StringValue,
             //apk o localización del APK
         };
 
@@ -48,54 +51,53 @@ const job = new CronJob('20 51 19 * * *', async () => {//seg/min/hour
 
         });
 
-        console.log("salio:");
+        let nom = moment().format('YYYY-MM-DD HH:mm');
+        nom = `${pruebaEjecutar.idPrueba}_${moment(nom).toDate().getTime()}_calabash.json`;
 
-        console.log(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${pruebaEjecutar.idPrueba}.json ./features/${pruebaEjecutar.scriptFile}`);
+        console.log(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`);
 
-        shell.exec(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${pruebaEjecutar.idPrueba}.json ./features/${pruebaEjecutar.scriptFile}`, function (e, stdout, stderr) {
+        shell.exec(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`, async (e, stdout, stderr) => {
             console.log(stdout);
             console.log(stderr);
+
+            // Cambiar estado a en ejecucion
+            await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                idPrueba: pruebaEjecutar.idPrueba,
+                estado: 'EN_EJECUCION'
+            });
+
             if (e) {
                 console.log("error:", e);
-                /*axios.post('http://localhost:3000/estrategias/estado_prueba', {
+
+                await axios.post('http://localhost:3000/estrategias/estado_prueba', {
                     idPrueba: pruebaEjecutar.idPrueba,
-                    estado: 'fallida'
-                });*/
+                    estado: 'FALLIDA'
+                });
             }
             else {
-                console.log("No error");
+                console.log("SATISFACTORIA");
+
+                // Cambiar estado a satisfactorio o fallido
+                await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                    idPrueba: pruebaEjecutar.idPrueba,
+                    estado: 'SATISFACTORIA'
+                });
+
+                fs.copyFile( `./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
+                    console.log("COPY: ", err);
+                    if (err) throw err;
+                });
             }
         });
-        /// Correr por consola
-        //shell.exec('calabash-android run ' + apkAdress + ' ' + '--format json --out report.json' + ' ' + `./features/${pruebaEjecutar.scriptFile}`, function (e, stdout, stderr) {
-        //shell.exec('calabash-android run ' + '../apks/com.habitrpg.android.habitica.apk' + ' ' + '--format json --out report.json' + ' ' 
 
 
-        // Cambiar estado a en ejecucion
-        /*await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-            idPrueba: pruebaEjecutar.idPrueba,
-            estado: 'enEjecucion'
-        });
-
-
-
-
-        // Cambiar estado a satisfactorio o fallido
-        await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-            idPrueba: pruebaEjecutar.idPrueba,
-            estado: resultadosGuardar.totalFailed === 0 ? 'satisfactoria' : 'fallida'
-        });
         // Eliminar mensaje de la cola
 
 
-        fs.copyFile('report.json', '../files/results/', (err) => {// reporte de la prueba
-            if (err) throw err;
-        });*/
+       
         // Pasar archivos de resultados a otra carpeta
 
         // Guardar resultado en tabla
-
-
 
 
     }
