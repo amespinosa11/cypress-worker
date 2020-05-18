@@ -9,7 +9,6 @@ const axios = require('axios');
 
 const desencolarMensajes = async (cola) => {
     let a = await sqs.receiveMessage(cola);
-    //console.log('Desencolar mensaje ',a);
     return a;
 }
 
@@ -23,83 +22,85 @@ const startTest = (apkAdress, scriptsAdress) => {
         }
     });
     console.log('ok');
-    //shell.exec(`hola`);
 }
 
 const job = new CronJob('20 51 15 * * *', async () => {//seg/min/hour
     console.log('*** Vamos a procesar pruebas calabash ***');
+    let cantidadMensajes = await obtenerCantidadMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Cypress`);
+    if (cantidadMensajes.data > 0) {
 
-    let prueba = await desencolarMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`);
+        let prueba = await desencolarMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`);
 
+        //let prueba = { code: 100 }
+        console.log('prueba : ', prueba);
 
-    //let prueba = { code: 100 }
-    console.log('prueba : ', prueba);
-    
-    if (prueba.code === 100) {
-        const pruebaEjecutar = {
-            idPrueba: parseInt(prueba.data.MessageAttributes.idPrueba.StringValue),
-            scriptFile: prueba.data.MessageAttributes.scriptFile.StringValue,
-            apkAdress: prueba.data.MessageAttributes.apkAdress.StringValue,
-            //apk o localización del APK
-        };
+        if (prueba.code === 100) {
+            const pruebaEjecutar = {
+                idPrueba: parseInt(prueba.data.MessageAttributes.idPrueba.StringValue),
+                scriptFile: prueba.data.MessageAttributes.scriptFile.StringValue,
+                apkAdress: prueba.data.MessageAttributes.apkAdress.StringValue,
+                //apk o localización del APK
+            };
 
-        //console.log(pruebaEjecutar);
+            //console.log(pruebaEjecutar);
 
-        // Ahora se debe transferir el archivo a /features
-        fs.copyFile(`../files/${pruebaEjecutar.scriptFile}`, `./features/${pruebaEjecutar.scriptFile}`, (err) => {//variable
-            if (err) throw err;
+            // Ahora se debe transferir el archivo a /features
+            fs.copyFile(`../files/${pruebaEjecutar.scriptFile}`, `./features/${pruebaEjecutar.scriptFile}`, (err) => {//variable
+                if (err) throw err;
 
-        });
-
-        let nom = moment().format('YYYY-MM-DD HH:mm');
-        nom = `${pruebaEjecutar.idPrueba}_${moment(nom).toDate().getTime()}_calabash.json`;
-
-        console.log(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`);
-
-        shell.exec(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`, async (e, stdout, stderr) => {
-            console.log(stdout);
-            console.log(stderr);
-
-            // Cambiar estado a en ejecucion
-            await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-                idPrueba: pruebaEjecutar.idPrueba,
-                estado: 'EN_EJECUCION'
             });
 
-            if (e) {
-                console.log("error:", e);
+            let nom = moment().format('YYYY-MM-DD HH:mm');
+            nom = `${pruebaEjecutar.idPrueba}_${moment(nom).toDate().getTime()}_calabash.json`;
 
+            console.log(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`);
+
+            shell.exec(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`, async (e, stdout, stderr) => {
+                console.log(stdout);
+                console.log(stderr);
+
+                // Cambiar estado a en ejecucion
                 await axios.post('http://localhost:3000/estrategias/estado_prueba', {
                     idPrueba: pruebaEjecutar.idPrueba,
-                    estado: 'FALLIDA'
-                });
-            }
-            else {
-                console.log("SATISFACTORIA");
-
-                // Cambiar estado a satisfactorio o fallido
-                await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-                    idPrueba: pruebaEjecutar.idPrueba,
-                    estado: 'SATISFACTORIA'
+                    estado: 'EN_EJECUCION'
                 });
 
-                fs.copyFile( `./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
-                    console.log("COPY: ", err);
-                    if (err) throw err;
-                });
-            }
-        });
+                if (e) {
+                    console.log("error:", e);
 
+                    await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                        idPrueba: pruebaEjecutar.idPrueba,
+                        estado: 'FALLIDA'
+                    });
+                }
+                else {
+                    console.log("SATISFACTORIA");
 
-        // Eliminar mensaje de la cola
+                    // Cambiar estado a satisfactorio o fallido
+                    await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                        idPrueba: pruebaEjecutar.idPrueba,
+                        estado: 'SATISFACTORIA'
+                    });
 
+                    // Pasar archivos de resultados a otra carpeta
+                    fs.copyFile(`./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
+                        console.log("COPY: ", err);
+                        if (err) throw err;
+                    });
 
-       
-        // Pasar archivos de resultados a otra carpeta
+                    // Eliminar mensaje de la cola
+                    await eliminarMensaje(`NOMBRE_COLA`, prueba.data.ReceiptHandle)
 
-        // Guardar resultado en tabla
+                    // Guardar resultado en tabla
+                    await axios.post('http://localhost:3000/estrategias/resultado', {
+                        id_prueba: pruebaEjecutar.idPrueba,
+                        tipo: "LOG",
+                        url:`../files/results/${nom}`
+                    });
+                }
+            });
 
-
+        }
     }
 });
 

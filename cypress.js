@@ -102,10 +102,12 @@ const job = new CronJob('0 */1 * * * *', async() => {
                         estado : resultadosGuardar.totalFailed === 0 ? 'SATISFACTORIA' : 'FALLIDA'
                     });
                     // Eliminar mensaje de la cola
-                    await eliminarMensaje(`https://sqs.us-east-1.amazonaws.com/677094465990/Cypress`, prueba.data.ReceiptHandle)
+                    await eliminarMensaje(``, prueba.data.ReceiptHandle)
 
+                    let nom = moment().format('YYYY-MM-DD HH:mm');
+                    nom = `${pruebaEjecutar.idPrueba}_${moment(nom).toDate().getTime()}_cypress.json`;
                     // Guardar resultados en .json
-                    fs.writeFile("../files/results/resultado.json", JSON.stringify(resultadosGuardar), 'utf8', (err) => {
+                    fs.writeFile(`../files/results/${nom}`, JSON.stringify(resultadosGuardar), 'utf8', (err) => {
                         if (err) {
                             console.log("An error occured while writing JSON Object to File.");
                             return console.log(err);
@@ -113,10 +115,18 @@ const job = new CronJob('0 */1 * * * *', async() => {
                     
                         console.log("JSON file has been saved.");
                     });
-                    // Pasar archivos de resultados a otra carpeta
+                    // Pasar archivos de resultados a otra carpeta(IMAGENES)
+                    /*fs.copyFile( `./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
+                        console.log("COPY: ", err);
+                        if (err) throw err;
+                    });*/
 
                     // Guardar resultado en tabla
-                    
+                    await axios.post('http://localhost:3000/estrategias/resultado', {
+                        id_prueba: pruebaEjecutar.idPrueba,
+                        tipo: "LOG",
+                        url:`../files/results/${nom}`
+                    });
             })
             .catch(async(err) => {
                 await axios.post('http://localhost:3000/estrategias/estado_prueba', {
