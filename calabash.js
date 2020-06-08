@@ -12,6 +12,16 @@ const desencolarMensajes = async (cola) => {
     return a;
 }
 
+const obtenerCantidadMensajes = async (cola) => {
+    let a = await sqs.getQueueMessages(cola);
+    return a;
+}
+
+const eliminarMensaje = async(cola,receipt) => {
+    let a = await sqs.deleteMessage(cola,receipt);
+    console.log(a);
+}
+
 const startTest = (apkAdress, scriptsAdress) => {
 
     shell.exec('calabash-android run ' + apkAdress + ' ' + '--format json --out report.json' + ' ' + scriptsAdress, function (e, stdout, stderr) {
@@ -24,9 +34,9 @@ const startTest = (apkAdress, scriptsAdress) => {
     console.log('ok');
 }
 
-const job = new CronJob('20 51 15 * * *', async () => {//seg/min/hour
+const job = new CronJob('15 55 11 * * *', async () => {//seg/min/hour
     console.log('*** Vamos a procesar pruebas calabash ***');
-    let cantidadMensajes = await obtenerCantidadMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Cypress`);
+    let cantidadMensajes = await obtenerCantidadMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`);
     if (cantidadMensajes.data > 0) {
 
         let prueba = await desencolarMensajes(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`);
@@ -56,48 +66,51 @@ const job = new CronJob('20 51 15 * * *', async () => {//seg/min/hour
             console.log(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`);
 
             shell.exec(`calabash-android run ${pruebaEjecutar.apkAdress} --format json --out ${nom} ./features/${pruebaEjecutar.scriptFile}`, async (e, stdout, stderr) => {
-                console.log(stdout);
-                console.log(stderr);
+                console.log("Z",stdout);
+                console.log("y",stderr);
 
-                // Cambiar estado a en ejecucion
-                await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-                    idPrueba: pruebaEjecutar.idPrueba,
-                    estado: 'EN_EJECUCION'
-                });
+                try {
 
-                if (e) {
+                    if (e) {
+                        console.log("error:", e);
+
+                        await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                            idPrueba: pruebaEjecutar.idPrueba,
+                            estado: 'FALLIDA'
+                        });
+                    }
+                    else {
+                        console.log("SATISFACTORIA");
+
+                        // Cambiar estado a satisfactorio o fallido
+                        await axios.post('http://localhost:3000/estrategias/estado_prueba', {
+                            idPrueba: pruebaEjecutar.idPrueba,
+                            estado: 'SATISFACTORIA'
+                        });
+
+                        // Pasar archivos de resultados a otra carpeta
+                        fs.copyFile(`./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
+                            console.log("COPY: ", err);
+                            if (err) throw err;
+                        });
+
+                        // Eliminar mensaje de la cola
+                        await eliminarMensaje(`https://sqs.us-east-1.amazonaws.com/677094465990/Calabash`, prueba.data.ReceiptHandle)
+
+                        // Guardar resultado en tabla
+                        await axios.post('http://localhost:3000/estrategias/resultado', {
+                            id_prueba: pruebaEjecutar.idPrueba,
+                            tipo: "LOG",
+                            url: `../files/results/${nom}`
+                        });
+                    }
+
+                }
+                catch (e) {
                     console.log("error:", e);
-
-                    await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-                        idPrueba: pruebaEjecutar.idPrueba,
-                        estado: 'FALLIDA'
-                    });
                 }
-                else {
-                    console.log("SATISFACTORIA");
 
-                    // Cambiar estado a satisfactorio o fallido
-                    await axios.post('http://localhost:3000/estrategias/estado_prueba', {
-                        idPrueba: pruebaEjecutar.idPrueba,
-                        estado: 'SATISFACTORIA'
-                    });
 
-                    // Pasar archivos de resultados a otra carpeta
-                    fs.copyFile(`./${nom}`, `../files/results/${nom}`, (err) => {// reporte de la prueba
-                        console.log("COPY: ", err);
-                        if (err) throw err;
-                    });
-
-                    // Eliminar mensaje de la cola
-                    await eliminarMensaje(`NOMBRE_COLA`, prueba.data.ReceiptHandle)
-
-                    // Guardar resultado en tabla
-                    await axios.post('http://localhost:3000/estrategias/resultado', {
-                        id_prueba: pruebaEjecutar.idPrueba,
-                        tipo: "LOG",
-                        url:`../files/results/${nom}`
-                    });
-                }
             });
 
         }
