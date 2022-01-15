@@ -18,7 +18,7 @@
     "cron": "^1.8.2",
     "file-system": "^2.2.2",
     "q": "^1.5.1",
-    "shelljs": "^0.8.3"
+    "shelljs": "^0.8.5"
   },
   "devDependencies": {
     "cypress": "^4.3.0"
